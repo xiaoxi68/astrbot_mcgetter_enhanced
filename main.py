@@ -396,7 +396,7 @@ class MyPlugin(Star):
                     sid = str(sinfo.get("id"))
                     name = sinfo.get("name", f"ID:{sid}")
                     hist = await get_trend_history(str(json_path), sid, hours=hours)
-                    img_b64 = generate_bar_chart_image(hist or [], name)
+                    img_b64 = generate_bar_chart_image(hist or [], name, hours=hours)
                     images.append(Comp.Image.fromBase64(img_b64))
                 except Exception as ie:
                     logger.error(f"mcdata 单服生成失败: id={identifier}, hours={hours}, err={ie}")
@@ -408,7 +408,7 @@ class MyPlugin(Star):
                     for sid, sinfo in servers.items():
                         name = sinfo.get("name", f"ID:{sid}")
                         hist = all_hist.get(str(sid), [])
-                        img_b64 = generate_bar_chart_image(hist or [], name)
+                        img_b64 = generate_bar_chart_image(hist or [], name, hours=hours)
                         images.append(Comp.Image.fromBase64(img_b64))
                 except Exception as ie:
                     logger.error(f"mcdata 全服生成失败: hours={hours}, err={ie}")

@@ -37,7 +37,7 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, width: int = 820, height: int = 400) -> str:
+def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, hours: int = 24, width: int = 820, height: int = 400) -> str:
     """Render a polished hourly bar chart (柱状图) and return base64 PNG.
 
     history: list of {"ts": int, "count": int}, ascending by time. May have gaps.
@@ -90,8 +90,12 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, wi
     axis_font = _load_font(12)
     stat_font = _load_font(11)
 
-    # title
-    title = f"{server_name} · 24小时在线人数"
+    # title with dynamic hours
+    try:
+        hrs = int(hours)
+    except Exception:
+        hrs = 24
+    title = f"{server_name} · {hrs}小时在线人数"
     draw.text((l, 15), title, fill=fg, font=title_font)
 
     # bounds
@@ -127,9 +131,10 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, wi
     ts_sorted = sorted(raw.keys())
     start_ts = ts_sorted[0]
     end_ts = ts_sorted[-1]
-    # cap to last 24h window for aesthetics
-    if end_ts - start_ts > 23 * 3600:
-        start_ts = end_ts - 23 * 3600
+    # cap to last N-hour window based on input hours
+    window_hours = max(1, int(hrs))
+    if end_ts - start_ts > (window_hours - 1) * 3600:
+        start_ts = end_ts - (window_hours - 1) * 3600
 
     timeline: List[int] = []
     cur = start_ts
