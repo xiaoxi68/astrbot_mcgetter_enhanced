@@ -358,16 +358,24 @@ class MyPlugin(Star):
 
             logger.info(f"mcdata 参数: identifier={identifier!r}, hours={hours!r}")
 
-            # 解析参数：单参数为数字且无同名/同ID服务器时，视为小时数
-            if identifier is not None and identifier.isdigit():
-                # 先尝试作为服务器ID
-                maybe = await get_server_info(str(json_path), identifier)
-                if maybe is None:
-                    try:
-                        hours = int(identifier)
-                        identifier = None
-                    except Exception:
-                        pass
+            # 解析参数：
+            # - 单参数为纯数字且没有同ID服务器时 → 作为小时数（全部服务器）
+            # - 否则 → 作为服务器名称/ID（统一转为字符串）
+            if identifier is not None:
+                ident_str = str(identifier)
+                if ident_str.isdigit():
+                    maybe = await get_server_info(str(json_path), ident_str)
+                    if maybe is None:
+                        # 视为小时数
+                        try:
+                            hours = int(ident_str)
+                            identifier = None
+                        except Exception:
+                            identifier = ident_str
+                    else:
+                        identifier = ident_str
+                else:
+                    identifier = ident_str
 
             # 规范化 hours 范围
             try:
