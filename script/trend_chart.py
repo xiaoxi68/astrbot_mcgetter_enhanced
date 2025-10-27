@@ -37,19 +37,21 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width: int = 800, height: int = 380) -> str:
-    """Draw a simple 24h trend bar chart and return base64 PNG.
+def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width: int = 820, height: int = 400) -> str:
+    """Render a polished hourly bar chart and return base64 PNG.
 
-    history: list of {"ts": int, "count": int}, ascending by time, up to 24.
+    history: list of {"ts": int, "count": int}, ascending by time. May have gaps.
+    The renderer normalizes to an hourly timeline (fills gaps with 0) so bars align with time.
     """
     # canvas - enhanced colors
-    bg = (28, 28, 32)
+    bg = (26, 27, 31)
     fg = (240, 240, 245)
-    accent = (85, 255, 170)
-    accent_light = (120, 255, 190)
-    grid = (70, 70, 75)
-    grid_light = (50, 50, 55)
-    stat_color = (180, 180, 190)
+    accent = (90, 250, 170)
+    accent_light = (140, 255, 200)
+    bar_border = (90, 210, 170)
+    grid = (70, 70, 78)
+    grid_light = (48, 48, 56)
+    stat_color = (185, 185, 196)
     
     img = Image.new("RGB", (width, height), bg)
     draw = ImageDraw.Draw(img)
@@ -78,18 +80,18 @@ def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width:
         # fallback
         draw.line([p0, p1], fill=fill, width=width)
 
-    # layout - increased margins for better spacing
-    l = 65
-    r = 30
+    # layout - balanced margins
+    l = 70
+    r = 36
     t = 70
-    b = 50
+    b = 52
 
     title_font = _load_font(22)
-    axis_font = _load_font(11)
-    stat_font = _load_font(10)
+    axis_font = _load_font(12)
+    stat_font = _load_font(11)
 
     # title
-    title = f"{server_name} - 24小时在线人数趋势"
+    title = f"{server_name} · 24小时在线人数柱状图"
     draw.text((l, 15), title, fill=fg, font=title_font)
 
     # bounds
@@ -105,10 +107,40 @@ def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width:
         img.save(buffer, format="PNG")
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-    counts = [int(d.get("count", 0)) for d in history]
+    # Normalize to hourly timeline: ensure bars align with hour ticks
+    def hour_bucket(ts: int) -> int:
+        return int(ts // 3600 * 3600)
+
+    # map original to bucket -> last value
+    raw = {}
+    for d in history:
+        ts = int(d.get("ts", 0) or 0)
+        cnt = int(d.get("count", 0) or 0)
+        if ts:
+            raw[hour_bucket(ts)] = cnt
+
+    if not raw:
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    ts_sorted = sorted(raw.keys())
+    start_ts = ts_sorted[0]
+    end_ts = ts_sorted[-1]
+    # cap to last 24h window for aesthetics
+    if end_ts - start_ts > 23 * 3600:
+        start_ts = end_ts - 23 * 3600
+
+    timeline: List[int] = []
+    cur = start_ts
+    while cur <= end_ts:
+        timeline.append(cur)
+        cur += 3600
+
+    counts = [int(raw.get(ts, 0)) for ts in timeline]
+    n = len(counts)
     max_c = max(counts) if counts else 1
     min_c = 0
-    n = len(counts)
     
     # helper for text size (Pillow兼容:优先使用textbbox) - 必须先定义
     def text_size(s: str, f: ImageFont.ImageFont) -> tuple[int, int]:
@@ -131,10 +163,9 @@ def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width:
     draw.text((width - r - tw, 18), stat_text, fill=stat_color, font=stat_font)
 
     def x_at(i: int) -> float:
-        """Calculate x position for bar i, with proper spacing"""
+        """Center of bar i over hourly ticks across the full width."""
         if n <= 1:
             return x0 + plot_w / 2
-        # Use uniform spacing across the plot width
         spacing = plot_w / n
         return x0 + spacing * (i + 0.5)
 
@@ -143,16 +174,22 @@ def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width:
         norm = (c - min_c) / rng
         return y1 - norm * plot_h
 
-    # Enhanced grid - more horizontal lines for better readability
+    # Choose a nice Y max and draw horizontal grid
+    import math
+    y_max = max(1, int(math.ceil(max_c / 5.0) * 5))
+    if y_max < 5:
+        y_max = 5
+    def y_at(c: int) -> float:
+        norm = (c - min_c) / max(1, (y_max - min_c))
+        return y1 - norm * plot_h
+
     num_grid_lines = 5
     for i in range(num_grid_lines + 1):
         frac = i / num_grid_lines
         y = y1 - frac * plot_h
         line_color = grid if i in [0, num_grid_lines] else grid_light
         draw.line([(x0, y), (x1, y)], fill=line_color, width=1)
-        
-        # Y-axis labels
-        val = int(min_c + (max_c - min_c) * frac)
+        val = int(round(min_c + (y_max - min_c) * frac))
         text = str(val)
         tw, th = text_size(text, axis_font)
         draw.text((x0 - 12 - tw, y - th/2), text, fill=fg, font=axis_font)
@@ -165,28 +202,24 @@ def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width:
         tw, th = text_size(avg_label, stat_font)
         draw.text((x1 - tw - 5, avg_y - th - 3), avg_label, fill=(255, 220, 120), font=stat_font)
 
-    # X-axis ticks - improved time label display
-    # Show labels at strategic points: start, middle points, and end
-    if n <= 6:
-        indices = list(range(n))
+    # X-axis ticks: label start, quarter points, and end
+    if n <= 8:
+        label_indices = list(range(n))
     else:
-        step = max(1, n // 6)
-        indices = list(range(0, n, step))
-        if (n - 1) not in indices:
-            indices.append(n - 1)
-    
-    for i in indices:
+        label_indices = sorted(set([0, n//4, n//2, 3*n//4, n-1]))
+
+    for i in label_indices:
         x = x_at(i)
         draw.line([(x, y1), (x, y1 + 5)], fill=grid, width=1)
-        ts = int(history[i].get("ts", 0))
-        lab = datetime.fromtimestamp(ts).strftime("%H:%M") if ts else ""
+        ts = timeline[i]
+        lab = datetime.fromtimestamp(ts).strftime("%H:%M")
         tw, th = text_size(lab, axis_font)
         draw.text((x - tw/2, y1 + 8), lab, fill=fg, font=axis_font)
 
     # bars with enhanced visual effects
     xs = [x_at(i) for i in range(n)]
     spacing = plot_w / n if n > 0 else plot_w
-    bar_w = max(8, min(35, spacing * 0.7))
+    bar_w = max(10, min(36, spacing * 0.68))
     
     for i, c in enumerate(counts):
         cx = xs[i]
@@ -194,31 +227,16 @@ def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width:
         right = cx + bar_w / 2
         top = y_at(c)
         
-        # Draw shadow/depth effect
+        # Soft shadow
         shadow_offset = 2
-        draw.rectangle(
-            [left + shadow_offset, top + shadow_offset, right + shadow_offset, y1 + shadow_offset],
-            fill=(20, 20, 22)
-        )
+        draw.rectangle([left + shadow_offset, top + shadow_offset, right + shadow_offset, y1 + shadow_offset], fill=(20, 20, 22))
         
-        # Gradient effect - draw multiple rectangles with varying opacity
+        # Single solid color bar (consistent top and bottom)
         bar_height = y1 - top
-        if bar_height > 10:
-            # Top part - lighter
-            mid_y = top + bar_height * 0.3
-            draw.rectangle([left, top, right, mid_y], fill=accent_light)
-            # Bottom part - standard color
-            draw.rectangle([left, mid_y, right, y1], fill=accent)
-        else:
-            # For short bars, use single color
-            draw.rectangle([left, top, right, y1], fill=accent)
+        radius = 4
+        draw.rounded_rectangle([left, top, right, y1], radius=radius, fill=accent)
         
-        # Border for bars
-        draw.rectangle([left, top, right, y1], outline=(100, 255, 200), width=1)
-        
-        # Highlight maximum value
-        if c == max_c and c > 0:
-            draw.rectangle([left, top, right, y1], outline=(255, 220, 100), width=2)
+        # No border/highlight for a cleaner flat style
         
         # Value label with better positioning logic
         label = str(c)
@@ -231,14 +249,11 @@ def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width:
             show_label = (i % 2 == 0) or (c == max_c) or (i == n - 1) or (i == 0)
         
         if show_label:
-            label_y = max(y0 + 2, top - th - 3)
-            # Add text background for better readability
-            padding = 2
-            draw.rectangle(
-                [cx - tw/2 - padding, label_y - padding,
-                 cx + tw/2 + padding, label_y + th + padding],
-                fill=(40, 40, 45)
-            )
+            # Keep a clean look: remove label box and add subtle shadow instead
+            gap = 8
+            label_y = max(y0 + 2, top - th - gap)
+            # shadow (compat approach, no alpha blending needed)
+            draw.text((cx - tw/2, label_y + 1), label, fill=(12, 12, 14), font=axis_font)
             draw.text((cx - tw/2, label_y), label, fill=accent_light, font=axis_font)
 
     buffer = io.BytesIO()
