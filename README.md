@@ -20,7 +20,7 @@
 
 ## 简介
 
-AstrBot Minecraft服务器信息查询插件，用于查询Minecraft服务器状态信息并使用图片展示。支持多服务器管理、实时状态查询、玩家列表显示、自动清理等功能。
+AstrBot Minecraft服务器信息查询插件，用于查询Minecraft服务器状态信息并使用图片展示和查询在线人数柱状图。支持多服务器管理、实时状态查询、玩家列表显示、自动清理等功能。
 
 ## 功能特性
 
@@ -236,7 +236,7 @@ AstrBot Minecraft服务器信息查询插件，用于查询Minecraft服务器状
 
 ## 版本信息
 
-- **插件版本**: 1.0.0
+- **插件版本**: 1.1.0
 - **JSON格式版本**: 2.3
 - **兼容性**: 兼容原插件数据
 
@@ -299,13 +299,10 @@ A: 是的，所有命令都支持通过名称或ID进行操作
 ## 支持
 
 - [AstrBot 帮助文档](https://astrbot.app)
-- [GitHub Issues](https://github.com/your-repo/astrbot_mcgetter_enhanced/issues)
+- [GitHub Issues](https://github.com/xiaxoi68/astrbot_mcgetter_enhanced/issues)
 ### TODO
 
-- [ ] 服务器状态历史记录
-- [ ] 自定义图片主题
 - [ ] 定时自动查询功能
-- [ ] 服务器分组管理
 
 ## 许可证
 

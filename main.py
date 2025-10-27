@@ -49,7 +49,7 @@ mchelp
 --示例：/mcdata（全部-24小时） /mcdata 24（全部-24小时） /mcdata GTNH 48（单服-48小时） /mcdata 2 24（ID=2 单服-24小时）
 """
 
-@register("astrbot_mcgetter_enhanced", "薄暝", "查询mc服务器信息和玩家列表,渲染为图片(修改自QiChen的mcgetter)", "1.0.0")
+@register("astrbot_mcgetter_enhanced", "薄暝", "查询mc服务器信息和玩家列表,在线人数柱状图,渲染为图片(修改自QiChen的mcgetter)", "1.1.0")
 class MyPlugin(Star):
     """Minecraft服务器信息查询插件"""
     
