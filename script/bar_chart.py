@@ -176,7 +176,9 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, wi
 
     # Choose a nice Y max and draw horizontal grid
     import math
-    y_max = max(1, int(math.ceil(max_c / 5.0) * 5))
+    # 保证顶部留白：最高柱值+1，再取到“好看”的5的倍数
+    target_top = max(0, max_c + 1)
+    y_max = int(math.ceil(target_top / 5.0) * 5) if target_top > 0 else 5
     if y_max < 5:
         y_max = 5
     def y_at(c: int) -> float:
