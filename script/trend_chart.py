@@ -91,7 +91,7 @@ def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width:
     stat_font = _load_font(11)
 
     # title
-    title = f"{server_name} · 24小时在线人数柱状图"
+    title = f"{server_name} · 24小时在线人数"
     draw.text((l, 15), title, fill=fg, font=title_font)
 
     # bounds

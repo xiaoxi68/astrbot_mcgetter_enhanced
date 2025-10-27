@@ -44,8 +44,9 @@ mchelp
 /mccleanup
 --手动触发自动清理（删除10天未查询成功的服务器）
 
-/mcdata [小时数=24]
---输出当前群全部已配置服务器在最近N小时的在线人数柱状图
+/mcdata [服务器名称/ID] [小时数=24]
+--输出当前群全部或指定服务器在最近N小时的在线人数柱状图
+--示例：/mcdata（全部-24小时） /mcdata 24（全部-24小时） /mcdata GTNH 48（单服-48小时） /mcdata 2 24（ID=2 单服-24小时）
 """
 
 @register("astrbot_mcgetter_enhanced", "薄暝", "查询mc服务器信息和玩家列表,渲染为图片(修改自QiChen的mcgetter)", "1.0.0")
@@ -345,8 +346,8 @@ class MyPlugin(Star):
             yield event.plain_result("自动清理时发生错误")
 
     @filter.command("mcdata")
-    async def mcdata(self, event: AstrMessageEvent, hours: int = 24) -> Optional[MessageEventResult]:
-        """输出当前群全部已配置服务器最近N小时（默认24）的在线人数柱状图，每服一张。"""
+    async def mcdata(self, event: AstrMessageEvent, identifier: Optional[str] = None, hours: int = 24) -> Optional[MessageEventResult]:
+        """输出当前群全部或指定服务器最近N小时（默认24）的在线人数柱状图。"""
         try:
             group_id = event.get_group_id()
             json_path = await self.get_json_path(group_id)
@@ -354,13 +355,46 @@ class MyPlugin(Star):
             if not servers:
                 yield event.plain_result("当前群无已配置服务器，请先使用 /mcadd 添加。")
                 return
-            all_hist = await get_all_trend_histories(str(json_path), hours=hours)
+
+            # 解析参数：单参数为数字且无同名/同ID服务器时，视为小时数
+            if identifier is not None and identifier.isdigit():
+                # 先尝试作为服务器ID
+                maybe = await get_server_info(str(json_path), identifier)
+                if maybe is None:
+                    try:
+                        hours = int(identifier)
+                        identifier = None
+                    except Exception:
+                        pass
+
+            # 规范化 hours 范围
+            try:
+                hours = int(hours)
+            except Exception:
+                hours = 24
+            hours = max(1, min(168, hours))
+
             images: List[Comp.Image] = []
-            for sid, sinfo in servers.items():
+            if identifier:
+                # 单服务器模式
+                sinfo = await get_server_info(str(json_path), identifier)
+                if not sinfo:
+                    yield event.plain_result(f"没有找到服务器 {identifier}")
+                    return
+                sid = str(sinfo.get("id"))
                 name = sinfo.get("name", f"ID:{sid}")
-                hist = all_hist.get(str(sid), [])
+                hist = await get_trend_history(str(json_path), sid, hours=hours)
                 img_b64 = generate_trend_image(hist or [], name)
                 images.append(Comp.Image.fromBase64(img_b64))
+            else:
+                # 全部服务器模式
+                all_hist = await get_all_trend_histories(str(json_path), hours=hours)
+                for sid, sinfo in servers.items():
+                    name = sinfo.get("name", f"ID:{sid}")
+                    hist = all_hist.get(str(sid), [])
+                    img_b64 = generate_trend_image(hist or [], name)
+                    images.append(Comp.Image.fromBase64(img_b64))
+
             if images:
                 yield event.chain_result(images)
             else:
