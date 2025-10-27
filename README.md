@@ -54,7 +54,7 @@ AstrBot Minecraft服务器信息查询插件，用于查询Minecraft服务器状
 | `/mcup` | 服务器名称/ID [新名称] [新地址] | 更新服务器信息 |
 | `/mclist` | 无 | 列出所有服务器及其ID |
 | `/mccleanup` | 无 | 手动触发自动清理 |
-| `/mcdata` | [小时数=24] | 输出当前群全部已配置服务器最近N小时趋势图 |
+| `/mcdata` | [小时数=24] | 输出当前群全部已配置服务器最近N小时柱状图 |
 
 ### 详细说明
 
@@ -109,6 +109,12 @@ AstrBot Minecraft服务器信息查询插件，用于查询Minecraft服务器状
 /mclist
 ```
 显示所有保存的服务器及其ID和地址。
+
+#### 列有服务器玩家柱状图
+```
+/mcdata 服务器名称/id
+```
+查看服务器最近N小时柱状图
 
 #### 手动清理
 ```
@@ -206,10 +212,10 @@ AstrBot Minecraft服务器信息查询插件，用于查询Minecraft服务器状
 4. 用 /mcdel 删除不需要的服务器
 ```
 
-### 场景3: 监控服务器状态（趋势）
+### 场景3: 监控服务器状态（柱状图）
 ```
 1. 添加服务器后系统默认开始按小时记录在线人数
-2. 使用 /mcdata 查看全部服务器最近N小时趋势图
+2. 使用 /mcdata 查看全部服务器最近N小时柱状图
 3. 结合 /mc 实时状态图，定位波动与问题
 ```
 
@@ -222,9 +228,9 @@ AstrBot Minecraft服务器信息查询插件，用于查询Minecraft服务器状
 
 ## 版本信息
 
-- **插件版本**: 1.4.0
+- **插件版本**: 1.0.0
 - **JSON格式版本**: 2.3
-- **兼容性**: 完全向后兼容
+- **兼容性**: 兼容原插件数据
 
 ## 注意事项
 
@@ -285,13 +291,9 @@ A: 是的，所有命令都支持通过名称或ID进行操作
 ## 支持
 
 - [AstrBot 帮助文档](https://astrbot.app)
-- [GitHub Issues](https://github.com/your-repo/astrbot_mcgetter/issues)
-
-## 开发计划
-
+- [GitHub Issues](https://github.com/your-repo/astrbot_mcgetter_enhanced/issues)
 ### TODO
 
-- [ ] 玩家名称颜色随在线天数改变
 - [ ] 服务器状态历史记录
 - [ ] 自定义图片主题
 - [ ] 定时自动查询功能

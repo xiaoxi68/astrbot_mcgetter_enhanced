@@ -45,7 +45,7 @@ mchelp
 --手动触发自动清理（删除10天未查询成功的服务器）
 
 /mcdata [小时数=24]
---输出当前群全部已配置服务器在最近N小时的在线人数趋势图
+--输出当前群全部已配置服务器在最近N小时的在线人数柱状图
 """
 
 @register("astrbot_mcgetter_enhanced", "薄暝", "查询mc服务器信息和玩家列表,渲染为图片(修改自QiChen的mcgetter)", "1.0.0")
@@ -346,7 +346,7 @@ class MyPlugin(Star):
 
     @filter.command("mcdata")
     async def mcdata(self, event: AstrMessageEvent, hours: int = 24) -> Optional[MessageEventResult]:
-        """输出当前群全部已配置服务器最近N小时（默认24）的在线人数趋势图，每服一张。"""
+        """输出当前群全部已配置服务器最近N小时（默认24）的在线人数柱状图，每服一张。"""
         try:
             group_id = event.get_group_id()
             json_path = await self.get_json_path(group_id)
@@ -364,10 +364,10 @@ class MyPlugin(Star):
             if images:
                 yield event.chain_result(images)
             else:
-                yield event.plain_result("暂无趋势数据，稍后再试。")
+                yield event.plain_result("暂无柱状图数据，稍后再试。")
         except Exception as e:
-            logger.error(f"生成趋势图失败: {e}")
-            yield event.plain_result("生成趋势图失败，请稍后再试。")
+            logger.error(f"生成柱状图失败: {e}")
+            yield event.plain_result("生成柱状图失败，请稍后再试。")
 
     async def get_img(self, server_name: str, host: str, server_id: Optional[str] = None, json_path: Optional[str] = None) -> Optional[str]:
         """
