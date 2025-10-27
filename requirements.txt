@@ -1,0 +1,3 @@
+mcstatus
+aiohttp
+pillow
