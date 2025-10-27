@@ -37,8 +37,8 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def generate_trend_image(history: List[Dict[str, Any]], server_name: str, width: int = 820, height: int = 400) -> str:
-    """Render a polished hourly bar chart and return base64 PNG.
+def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, width: int = 820, height: int = 400) -> str:
+    """Render a polished hourly bar chart (柱状图) and return base64 PNG.
 
     history: list of {"ts": int, "count": int}, ascending by time. May have gaps.
     The renderer normalizes to an hourly timeline (fills gaps with 0) so bars align with time.

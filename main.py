@@ -6,7 +6,7 @@ from astrbot.api.star import Context, Star, register, StarTools
 from astrbot.api import logger
 from .script.get_server_info import get_server_status
 from .script.get_img import generate_server_info_image
-from .script.trend_chart import generate_trend_image
+from .script.bar_chart import generate_bar_chart_image
 from .script.json_operate import (
     read_json, add_data, del_data, update_data, 
     get_all_servers, get_server_info, get_server_by_name,
@@ -356,6 +356,8 @@ class MyPlugin(Star):
                 yield event.plain_result("当前群无已配置服务器，请先使用 /mcadd 添加。")
                 return
 
+            logger.info(f"mcdata 参数: identifier={identifier!r}, hours={hours!r}")
+
             # 解析参数：单参数为数字且无同名/同ID服务器时，视为小时数
             if identifier is not None and identifier.isdigit():
                 # 先尝试作为服务器ID
@@ -373,27 +375,36 @@ class MyPlugin(Star):
             except Exception:
                 hours = 24
             hours = max(1, min(168, hours))
+            logger.info(f"mcdata 解析后: target={'ALL' if not identifier else identifier}, hours={hours}")
 
             images: List[Comp.Image] = []
             if identifier:
                 # 单服务器模式
-                sinfo = await get_server_info(str(json_path), identifier)
-                if not sinfo:
-                    yield event.plain_result(f"没有找到服务器 {identifier}")
-                    return
-                sid = str(sinfo.get("id"))
-                name = sinfo.get("name", f"ID:{sid}")
-                hist = await get_trend_history(str(json_path), sid, hours=hours)
-                img_b64 = generate_trend_image(hist or [], name)
-                images.append(Comp.Image.fromBase64(img_b64))
+                try:
+                    sinfo = await get_server_info(str(json_path), identifier)
+                    if not sinfo:
+                        yield event.plain_result(f"没有找到服务器 {identifier}")
+                        return
+                    sid = str(sinfo.get("id"))
+                    name = sinfo.get("name", f"ID:{sid}")
+                    hist = await get_trend_history(str(json_path), sid, hours=hours)
+                    img_b64 = generate_bar_chart_image(hist or [], name)
+                    images.append(Comp.Image.fromBase64(img_b64))
+                except Exception as ie:
+                    logger.error(f"mcdata 单服生成失败: id={identifier}, hours={hours}, err={ie}")
+                    raise
             else:
                 # 全部服务器模式
-                all_hist = await get_all_trend_histories(str(json_path), hours=hours)
-                for sid, sinfo in servers.items():
-                    name = sinfo.get("name", f"ID:{sid}")
-                    hist = all_hist.get(str(sid), [])
-                    img_b64 = generate_trend_image(hist or [], name)
-                    images.append(Comp.Image.fromBase64(img_b64))
+                try:
+                    all_hist = await get_all_trend_histories(str(json_path), hours=hours)
+                    for sid, sinfo in servers.items():
+                        name = sinfo.get("name", f"ID:{sid}")
+                        hist = all_hist.get(str(sid), [])
+                        img_b64 = generate_bar_chart_image(hist or [], name)
+                        images.append(Comp.Image.fromBase64(img_b64))
+                except Exception as ie:
+                    logger.error(f"mcdata 全服生成失败: hours={hours}, err={ie}")
+                    raise
 
             if images:
                 yield event.chain_result(images)
