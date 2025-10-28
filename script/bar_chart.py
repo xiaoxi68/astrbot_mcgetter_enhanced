@@ -173,11 +173,6 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
         spacing = plot_w / n
         return x0 + spacing * (i + 0.5)
 
-    def y_at(c: int) -> float:
-        rng = max(1, max_c - min_c)
-        norm = (c - min_c) / rng
-        return y1 - norm * plot_h
-
     # Choose a nice Y max and draw horizontal grid
     import math
     # 保证顶部留白：最高柱值+1，再取到“好看”的5的倍数
