@@ -119,7 +119,8 @@ async def read_json(json_path: str) -> Dict[str, Any]:
 
         async with aiofiles.open(json_path, 'r', encoding='utf-8') as f:
             content = await f.read()
-            logger.info(f"读取到的JSON内容: {content}")
+            # 避免在控制台输出完整 JSON 内容，改为精简日志
+            logger.debug(f"读取到的JSON内容（{len(content)} 字节）")
             data = json.loads(content)
             
             # 检查是否为旧版格式，如果是则自动迁移
@@ -158,7 +159,13 @@ async def read_json(json_path: str) -> Dict[str, Any]:
                 # 清空旧字段（后续写回不会再包含）
                 data.pop("trend", None)
             
-            logger.info(f"成功读取JSON文件: {json_path}, 数据: {data}")
+            # 精简化的读取摘要，避免冗长JSON输出
+            try:
+                servers_cnt = len(data.get("servers", {}))
+                trends_cnt = sum(len((v or {}).get("history", [])) for v in data.get("trends", {}).values())
+                logger.info(f"成功读取JSON文件: {json_path}, servers={servers_cnt}, trends_points={trends_cnt}")
+            except Exception:
+                logger.info(f"成功读取JSON文件: {json_path}")
             return data
     except json.JSONDecodeError as e:
         logger.error(f"JSON解析失败: {e}, 文件内容: {content if 'content' in locals() else '无法读取'}")
