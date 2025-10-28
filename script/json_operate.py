@@ -1,11 +1,10 @@
 import json
-import asyncio
 from pathlib import Path
 import aiofiles
 from typing import Dict, Any, Optional, Tuple, List
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -18,9 +17,7 @@ DEFAULT_CONFIG = {
     "next_id": 1,
     "servers": {},
     "last_cleanup": None,
-    # 兼容旧版的单服务器记录字段（已废弃，迁移到 trends）
-    "trend": None,
-    # 多服务器趋势监控：{"<server_id>": {"history": [{"ts": int, "count": int}]}}
+    # 多服务器柱状图/趋势数据：{"<server_id>": {"history": [{"ts": int, "count": int}]}}
     "trends": {}
 }
 
@@ -141,8 +138,6 @@ async def read_json(json_path: str) -> Dict[str, Any]:
                 data["next_id"] = 1
             if "servers" not in data:
                 data["servers"] = {}
-            if "trend" not in data:
-                data["trend"] = None
             if "trends" not in data or not isinstance(data.get("trends"), dict):
                 data["trends"] = {}
 
@@ -162,8 +157,8 @@ async def read_json(json_path: str) -> Dict[str, Any]:
                     if len(merged) > 24:
                         merged = merged[-24:]
                     data["trends"][sid]["history"] = merged
-                # 清空旧字段
-                data["trend"] = None
+                # 清空旧字段（后续写回不会再包含）
+                data.pop("trend", None)
             
             logger.info(f"成功读取JSON文件: {json_path}, 数据: {data}")
             return data
@@ -191,19 +186,7 @@ def get_server_by_name(data: Dict[str, Any], name: str) -> Optional[Tuple[str, D
             return server_id, server_info
     return None
 
-def get_server_by_id(data: Dict[str, Any], server_id: str) -> Optional[Dict[str, Any]]:
-    """
-    通过服务器ID查找服务器信息
-    
-    Args:
-        data: 配置数据
-        server_id: 服务器ID
-        
-    Returns:
-        Optional[Dict[str, Any]]: 服务器信息或None
-    """
-    servers = data.get("servers", {})
-    return servers.get(server_id)
+# 已废弃的按ID直接读 helper，使用 get_server_info 统一入口
 
 async def add_data(json_path: str, name: str, host: str) -> bool:
     """

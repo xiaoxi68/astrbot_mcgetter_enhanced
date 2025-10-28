@@ -449,12 +449,12 @@ class MyPlugin(Star):
             if json_path and server_id:
                 await update_server_status(json_path, server_id, True)
 
-            # 默认对所有服务器记录趋势：追加本小时记录
+            # 默认对所有服务器记录小时数据：出现异常记录到日志便于排查
             try:
                 if json_path and server_id:
                     await append_trend_point(json_path, str(server_id), int(datetime.now().timestamp()), int(info['plays_online']))
-            except Exception as _:
-                pass
+            except Exception as e:
+                logger.warning(f"追加柱状图数据失败 group={json_path}, sid={server_id}: {e}")
 
             info['server_name'] = server_name
             # 如果有服务器ID，则在名称前添加ID

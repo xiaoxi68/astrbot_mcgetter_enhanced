@@ -48,7 +48,6 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
     fg = (240, 240, 245)
     accent = (90, 250, 170)
     accent_light = (140, 255, 200)
-    bar_border = (90, 210, 170)
     grid = (70, 70, 78)
     grid_light = (48, 48, 56)
     stat_color = (185, 185, 196)

@@ -147,7 +147,7 @@ AstrBot Minecraft服务器信息查询插件，用于查询Minecraft服务器状
     "version": "2.3",
     "next_id": 5,
     "last_cleanup": 1752028440,
-    "trend": null,
+    
     "trends": {
         "1": {"history": [{"ts": 1752024800, "count": 5}, {"ts": 1752028400, "count": 7}]},
         "2": {"history": [{"ts": 1752024800, "count": 0}]}
