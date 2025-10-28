@@ -388,11 +388,11 @@ async def append_trend_point(json_path: str, server_id: str, ts: int, count: int
         await write_json(json_path, data)
         return True
     except Exception as e:
-        logger.error(f"追加趋势记录失败: {e}")
+        logger.error(f"追加柱状图记录失败: {e}")
         return False
 
 async def get_trend_history(json_path: str, server_id: str, hours: int = 24) -> Optional[List[Dict[str, Any]]]:
-    """获取指定服务器的趋势记录（最近N小时）。"""
+    """获取指定服务器的柱状图历史记录（最近N小时）。"""
     try:
         data = await read_json(json_path)
         trends = data.get("trends", {})
@@ -401,11 +401,11 @@ async def get_trend_history(json_path: str, server_id: str, hours: int = 24) -> 
             hist = hist[-hours:]
         return hist
     except Exception as e:
-        logger.error(f"获取趋势历史失败: {e}")
+        logger.error(f"获取柱状图历史失败: {e}")
         return None
 
 async def get_all_trend_histories(json_path: str, hours: int = 24) -> Dict[str, List[Dict[str, Any]]]:
-    """获取所有服务器的趋势记录（最近N小时）。"""
+    """获取所有服务器的柱状图历史记录（最近N小时）。"""
     try:
         data = await read_json(json_path)
         trends = data.get("trends", {}) or {}
@@ -417,7 +417,7 @@ async def get_all_trend_histories(json_path: str, hours: int = 24) -> Dict[str, 
             result[str(sid)] = hist
         return result
     except Exception as e:
-        logger.error(f"获取所有趋势历史失败: {e}")
+        logger.error(f"获取所有柱状图历史失败: {e}")
         return {}
 
 async def update_server_status(json_path: str, identifier: str, success: bool) -> bool:
@@ -494,6 +494,9 @@ async def auto_cleanup_servers(json_path: str) -> List[Dict[str, Any]]:
         cutoff_time = current_time - (AUTO_CLEANUP_DAYS * 24 * 3600)  # 10天前的时间戳
         deleted_servers = []
         
+        # 柱状图数据映射（用于计算最后有效成功时间）
+        trends_map = data.get("trends", {}) or {}
+
         # 检查每个服务器
         servers_to_delete = []
         for server_id, server_info in servers.items():

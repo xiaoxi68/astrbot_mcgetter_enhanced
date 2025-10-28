@@ -233,13 +233,7 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
         tw, th = text_size(text, axis_font)
         draw.text((x0 - 12 - tw, y - th/2), text, fill=fg, font=axis_font)
     
-    # Draw average line
-    if avg_c > 0:
-        avg_y = y_at(avg_c)
-        dashed_line((x0, avg_y), (x1, avg_y), fill=(255, 200, 100), width=1, dash=(5, 3))
-        avg_label = f"平均: {avg_c}"
-        tw, th = text_size(avg_label, stat_font)
-        draw.text((x1 - tw - 5, avg_y - th - 3), avg_label, fill=(255, 220, 120), font=stat_font)
+    # 平均值虚线省略（右上角已显示平均值）
 
     # X-axis ticks: label start, quarter points, and end
     if n <= 8:
@@ -281,19 +275,13 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
         label = str(c)
         tw, th = text_size(label, axis_font)
         
-        # Only show labels if there's enough space (avoid overlap)
-        show_label = True
-        if i > 0 and n > 12:
-            # For dense charts, only show every other label or important ones
-            show_label = (i % 2 == 0) or (c == max_c) or (i == n - 1) or (i == 0)
-        
-        if show_label:
-            # Keep a clean look: remove label box and add subtle shadow instead
-            gap = LABEL_GAP
-            label_y = max(y0 + 2, top - th - gap)
-            # shadow (compat approach, no alpha blending needed)
-            draw.text((cx - tw/2, label_y + 1), label, fill=(12, 12, 14), font=axis_font)
-            draw.text((cx - tw/2, label_y), label, fill=accent_light, font=axis_font)
+        # 始终绘制在柱顶上方；空间不足时贴紧上边界（不放入柱内）
+        gap = LABEL_GAP
+        label_y = max(y0 + 2, top - th - gap)
+        label_x = max(x0 + 2, min(x1 - tw - 2, cx - tw/2))
+        # 阴影 + 文字
+        draw.text((label_x, label_y + 1), label, fill=(12, 12, 14), font=axis_font)
+        draw.text((label_x, label_y), label, fill=ACCENT_LIGHT, font=axis_font)
 
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")

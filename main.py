@@ -61,10 +61,10 @@ class MyPlugin(Star):
         """
         super().__init__(context)
         logger.info("MyPlugin 初始化完成")
-        # 启动每小时趋势记录后台任务（单例，默认对所有已配置服务器启用）
+        # 启动每小时柱状图数据采样后台任务（单例，默认对所有已配置服务器启用）
         self._trend_task: Optional[asyncio.Task] = None
         if getattr(self, "_trend_task", None) is None:
-            self._trend_task = asyncio.create_task(self._trend_loop())
+            self._trend_task = asyncio.create_task(self._bar_data_loop())
 
     @filter.command("mchelp")
     async def get_help(self, event: AstrMessageEvent) -> MessageEventResult:
@@ -510,33 +510,46 @@ class MyPlugin(Star):
         logger.info(f"群号 {group_id} 的 JSON 文件路径: {json_path}")
         return json_path
 
-    async def _trend_loop(self):
-        """每小时扫描所有群配置，对全部服务器采样一次在线人数。"""
+    async def _bar_data_loop(self):
+        """每小时扫描所有群配置，按 host 去重采样一次并写回所有群，保证跨群一致。"""
         while True:
             try:
                 data_dir = StarTools.get_data_dir("astrbot_mcgetter")
+                host_map: Dict[str, list] = {}
                 if data_dir.exists():
+                    # 先构建 host → [(json_path, sid), ...] 的映射
                     for p in data_dir.glob("*.json"):
                         try:
                             data = await read_json(str(p))
                             servers = data.get("servers", {})
                             for sid, sinfo in servers.items():
-                                try:
-                                    host = sinfo.get("host")
-                                    if not host:
-                                        continue
-                                    status = await get_server_status(host)
-                                    if status and isinstance(status.get("plays_online"), int):
-                                        await append_trend_point(str(p), str(sid), int(datetime.now().timestamp()), int(status["plays_online"]))
-                                except Exception as ie:
-                                    logger.debug(f"单服趋势采样失败: {p.name} sid={sid}: {ie}")
+                                host = (sinfo or {}).get("host")
+                                if not host:
+                                    continue
+                                host_map.setdefault(str(host), []).append((str(p), str(sid)))
                         except Exception as e:
-                            logger.warning(f"趋势采样失败: {p.name}: {e}")
+                            logger.warning(f"数据采样预处理失败: {p.name}: {e}")
+
+                # 逐 host 采样一次，并写回所有关联群文件
+                now_ts = int(datetime.now().timestamp())
+                for host, targets in host_map.items():
+                    try:
+                        status = await get_server_status(host)
+                        if status and isinstance(status.get("plays_online"), int):
+                            cnt = int(status["plays_online"])
+                            for json_path, sid in targets:
+                                try:
+                                    await append_trend_point(json_path, sid, now_ts, cnt)
+                                except Exception as ie:
+                                    logger.debug(f"写入柱状图数据失败 host={host} file={json_path} sid={sid}: {ie}")
+                    except Exception as ie:
+                        logger.debug(f"host 采样失败 host={host}: {ie}")
+
                 # 计算距离下个整点的秒数
                 now = datetime.now()
                 next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
                 sleep_seconds = max(10, int((next_hour - now).total_seconds()))
                 await asyncio.sleep(sleep_seconds)
             except Exception as e:
-                logger.error(f"趋势采样循环异常: {e}")
+                logger.error(f"数据采样循环异常: {e}")
                 await asyncio.sleep(300)
