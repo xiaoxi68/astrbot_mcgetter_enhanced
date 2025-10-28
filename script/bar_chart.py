@@ -3,6 +3,45 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import base64
 from datetime import datetime
+import math
+
+# ==========================
+# Styling & Layout Constants
+# ==========================
+# Colors
+BG_COLOR = (26, 27, 31)
+FG_COLOR = (240, 240, 245)
+ACCENT = (90, 250, 170)
+ACCENT_LIGHT = (140, 255, 200)
+GRID_COLOR = (70, 70, 78)
+GRID_LIGHT_COLOR = (48, 48, 56)
+STAT_COLOR = (185, 185, 196)
+
+# Margins
+MARGIN_LEFT = 70
+MARGIN_RIGHT = 36
+MARGIN_TOP = 70
+MARGIN_BOTTOM = 52
+
+# Fonts
+TITLE_FONT_SIZE = 22
+AXIS_FONT_SIZE = 12
+STAT_FONT_SIZE = 11
+TITLE_Y = 15
+
+# Grid / Axis
+GRID_LINES = 5
+DASH_PATTERN = (5, 3)
+Y_TICK_STEP = 5
+MIN_Y_MAX = 5
+
+# Bars
+BAR_MIN_WIDTH = 10
+BAR_MAX_WIDTH = 36
+BAR_WIDTH_FACTOR = 0.68
+BAR_RADIUS = 4
+SHADOW_OFFSET = 2
+LABEL_GAP = 8
 
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont:
@@ -44,19 +83,19 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
     The renderer normalizes to an hourly timeline (fills gaps with 0) so bars align with time.
     """
     # canvas - enhanced colors
-    bg = (26, 27, 31)
-    fg = (240, 240, 245)
-    accent = (90, 250, 170)
-    accent_light = (140, 255, 200)
-    grid = (70, 70, 78)
-    grid_light = (48, 48, 56)
-    stat_color = (185, 185, 196)
+    bg = BG_COLOR
+    fg = FG_COLOR
+    accent = ACCENT
+    accent_light = ACCENT_LIGHT
+    grid = GRID_COLOR
+    grid_light = GRID_LIGHT_COLOR
+    stat_color = STAT_COLOR
     
     img = Image.new("RGB", (width, height), bg)
     draw = ImageDraw.Draw(img)
 
     # Dashed line helper (compat: Pillow < 10 has no dash kw)
-    def dashed_line(p0: tuple[float, float], p1: tuple[float, float], *, fill, width: int = 1, dash: tuple[int, int] = (5, 3)):
+    def dashed_line(p0: tuple[float, float], p1: tuple[float, float], *, fill, width: int = 1, dash: tuple[int, int] = DASH_PATTERN):
         (x0, y0), (x1, y1) = p0, p1
         on, off = dash
         # Only implement axis-aligned dashes (horizontal/vertical), else fallback solid
@@ -80,14 +119,14 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
         draw.line([p0, p1], fill=fill, width=width)
 
     # layout - balanced margins
-    l = 70
-    r = 36
-    t = 70
-    b = 52
+    l = MARGIN_LEFT
+    r = MARGIN_RIGHT
+    t = MARGIN_TOP
+    b = MARGIN_BOTTOM
 
-    title_font = _load_font(22)
-    axis_font = _load_font(12)
-    stat_font = _load_font(11)
+    title_font = _load_font(TITLE_FONT_SIZE)
+    axis_font = _load_font(AXIS_FONT_SIZE)
+    stat_font = _load_font(STAT_FONT_SIZE)
 
     # title with dynamic hours
     try:
@@ -95,7 +134,7 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
     except Exception:
         hrs = 24
     title = f"{server_name} · {hrs}小时在线人数"
-    draw.text((l, 15), title, fill=fg, font=title_font)
+    draw.text((l, TITLE_Y), title, fill=fg, font=title_font)
 
     # bounds
     plot_w = width - l - r
@@ -174,17 +213,16 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
         return x0 + spacing * (i + 0.5)
 
     # Choose a nice Y max and draw horizontal grid
-    import math
     # 保证顶部留白：最高柱值+1，再取到“好看”的5的倍数
     target_top = max(0, max_c + 1)
-    y_max = int(math.ceil(target_top / 5.0) * 5) if target_top > 0 else 5
-    if y_max < 5:
-        y_max = 5
+    y_max = int(math.ceil(target_top / float(Y_TICK_STEP)) * Y_TICK_STEP) if target_top > 0 else MIN_Y_MAX
+    if y_max < MIN_Y_MAX:
+        y_max = MIN_Y_MAX
     def y_at(c: int) -> float:
         norm = (c - min_c) / max(1, (y_max - min_c))
         return y1 - norm * plot_h
 
-    num_grid_lines = 5
+    num_grid_lines = GRID_LINES
     for i in range(num_grid_lines + 1):
         frac = i / num_grid_lines
         y = y1 - frac * plot_h
@@ -220,7 +258,7 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
     # bars with enhanced visual effects
     xs = [x_at(i) for i in range(n)]
     spacing = plot_w / n if n > 0 else plot_w
-    bar_w = max(10, min(36, spacing * 0.68))
+    bar_w = max(BAR_MIN_WIDTH, min(BAR_MAX_WIDTH, spacing * BAR_WIDTH_FACTOR))
     
     for i, c in enumerate(counts):
         cx = xs[i]
@@ -229,12 +267,12 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
         top = y_at(c)
         
         # Soft shadow
-        shadow_offset = 2
+        shadow_offset = SHADOW_OFFSET
         draw.rectangle([left + shadow_offset, top + shadow_offset, right + shadow_offset, y1 + shadow_offset], fill=(20, 20, 22))
         
         # Single solid color bar (consistent top and bottom)
         bar_height = y1 - top
-        radius = 4
+        radius = BAR_RADIUS
         draw.rounded_rectangle([left, top, right, y1], radius=radius, fill=accent)
         
         # No border/highlight for a cleaner flat style
@@ -251,7 +289,7 @@ def generate_bar_chart_image(history: List[Dict[str, Any]], server_name: str, ho
         
         if show_label:
             # Keep a clean look: remove label box and add subtle shadow instead
-            gap = 8
+            gap = LABEL_GAP
             label_y = max(y0 + 2, top - th - gap)
             # shadow (compat approach, no alpha blending needed)
             draw.text((cx - tw/2, label_y + 1), label, fill=(12, 12, 14), font=axis_font)
