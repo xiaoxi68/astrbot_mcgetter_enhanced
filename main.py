@@ -45,7 +45,7 @@ mchelp
 --手动触发自动清理（删除10天未查询成功的服务器）
 
 /mcdata [服务器名称/ID] [小时数=24]
---输出当前群全部或指定服务器在最近N小时的在线人数柱状图
+--输出当前群全部或指定服务器在最近N小时的在线人数柱状图（不可达的服务器将被跳过）
 --示例：/mcdata（全部-24小时） /mcdata 24（全部-24小时） /mcdata GTNH 48（单服-48小时） /mcdata 2 24（ID=2 单服-24小时）
 """
 
@@ -395,6 +395,12 @@ class MyPlugin(Star):
                         return
                     sid = str(sinfo.get("id"))
                     name = sinfo.get("name", f"ID:{sid}")
+                    # 与 mc 行为对齐：当前不可达则跳过
+                    host = sinfo.get("host")
+                    status_now = await get_server_status(host) if host else None
+                    if not status_now:
+                        yield event.plain_result(f"{name} 当前不可达，已跳过")
+                        return
                     hist = await get_trend_history(str(json_path), sid, hours=hours)
                     img_b64 = generate_bar_chart_image(hist or [], name, hours=hours)
                     images.append(Comp.Image.fromBase64(img_b64))
@@ -407,6 +413,15 @@ class MyPlugin(Star):
                     all_hist = await get_all_trend_histories(str(json_path), hours=hours)
                     for sid, sinfo in servers.items():
                         name = sinfo.get("name", f"ID:{sid}")
+                        host = sinfo.get("host")
+                        # 与 mc 行为对齐：当前不可达则跳过该服
+                        try:
+                            status_now = await get_server_status(host) if host else None
+                        except Exception as ie:
+                            logger.debug(f"mcdata 全服检测失败: {name} host={host} err={ie}")
+                            status_now = None
+                        if not status_now:
+                            continue
                         hist = all_hist.get(str(sid), [])
                         img_b64 = generate_bar_chart_image(hist or [], name, hours=hours)
                         images.append(Comp.Image.fromBase64(img_b64))
