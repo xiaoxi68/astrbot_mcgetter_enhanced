@@ -2,13 +2,11 @@ import json
 from pathlib import Path
 import aiofiles
 from typing import Dict, Any, Optional, Tuple, List
-import logging
 import time
 from datetime import datetime
+from astrbot.api import logger
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# 统一使用 AstrBot 提供的日志系统
 
 # 配置版本常量
 CURRENT_VERSION = "2.3"

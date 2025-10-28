@@ -4,6 +4,7 @@ import io
 from pathlib import Path
 import base64
 from typing import Optional
+from astrbot.api import logger
 
 async def load_font(font_size):
     # 尝试多路径加载
@@ -42,7 +43,7 @@ async def fetch_icon(icon_base64: Optional[str] = None) -> Optional[Image.Image]
         icon_data = base64.b64decode(icon_base64)
         return Image.open(io.BytesIO(icon_data)).convert("RGBA")
     except Exception as e:
-        print(f"Base64图标解码失败: {str(e)}")
+        logger.warning(f"Base64 图标解码失败: {e}")
         return None
 
 async def generate_server_info_image(
