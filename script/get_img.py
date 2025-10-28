@@ -28,10 +28,7 @@ async def load_font(font_size):
     except:
         return ImageFont.load_default()
 
-# 在代码中替换字体加载部分
-title_font = load_font(30)
-text_font = load_font(20)
-small_font = load_font(18)
+
 
 async def fetch_icon(icon_base64: Optional[str] = None) -> Optional[Image.Image]:
     """处理Base64编码的服务器图标"""
