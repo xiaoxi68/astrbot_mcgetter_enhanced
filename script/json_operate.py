@@ -19,8 +19,10 @@ DEFAULT_CONFIG = {
     "trends": {}
 }
 
-# 自动清理配置
+# 自动清理与历史保留配置
 AUTO_CLEANUP_DAYS = 10  # 10天未查询成功自动删除
+# 为了支持 /mcdata 自定义小时数（上限 168），此处将历史保留条数提升到 168
+MAX_HISTORY_POINTS = 168
 
 def is_old_format(data: Dict[str, Any]) -> bool:
     """
@@ -152,9 +154,9 @@ async def read_json(json_path: str) -> Dict[str, Any]:
                         ts = int(h.get("ts", 0))
                         existing[ts] = int(h.get("count", 0))
                     merged = [{"ts": ts, "count": cnt} for ts, cnt in sorted(existing.items())]
-                    # 仅保留最近24条
-                    if len(merged) > 24:
-                        merged = merged[-24:]
+                    # 仅保留最近 MAX_HISTORY_POINTS 条
+                    if len(merged) > MAX_HISTORY_POINTS:
+                        merged = merged[-MAX_HISTORY_POINTS:]
                     data["trends"][sid]["history"] = merged
                 # 清空旧字段（后续写回不会再包含）
                 data.pop("trend", None)
@@ -381,8 +383,8 @@ async def append_trend_point(json_path: str, server_id: str, ts: int, count: int
             history[-1]["count"] = int(count)
         else:
             history.append({"ts": ts_h, "count": int(count)})
-        if len(history) > 24:
-            history[:] = history[-24:]
+        if len(history) > MAX_HISTORY_POINTS:
+            history[:] = history[-MAX_HISTORY_POINTS:]
         trends[str(server_id)]["history"] = history
         data["trends"] = trends
         await write_json(json_path, data)
