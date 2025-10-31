@@ -216,25 +216,23 @@ async def add_data(json_path: str, name: str, host: str) -> bool:
             logger.warning(f"服务器名称已存在: {name} (ID: {existing_server[0]})")
             return False
 
-        # 分配新的ID：复用已删除形成的空洞，选择最小可用正整数
+        # 分配新的ID：使用 next_id 单调递增，不复用已删除的 ID
         servers = data.get("servers", {})
         used_ids = set()
         for k in servers.keys():
             try:
                 used_ids.add(int(k))
-            except (TypeError, ValueError):
-                # 跳过非数字键，理论上不应出现
+            except Exception:
                 continue
 
-        new_id = 1
-        while new_id in used_ids:
-            new_id += 1
-
-        server_id = str(new_id)
-
-        # 更新 next_id 为当前已用最大ID+1，保持向后兼容
+        next_id_val = int(data.get("next_id", 1) or 1)
         max_used = max(used_ids) if used_ids else 0
-        data["next_id"] = max(max_used, new_id) + 1
+        # 确保新ID 大于当前已用最大ID
+        new_id_int = max(next_id_val, max_used + 1)
+        server_id = str(new_id_int)
+
+        # 更新 next_id 为新ID+1
+        data["next_id"] = new_id_int + 1
         
         # 添加新服务器
         current_time = int(time.time())

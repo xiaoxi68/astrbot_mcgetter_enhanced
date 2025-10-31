@@ -48,7 +48,7 @@ mchelp
 --输出当前群全部或指定服务器在最近N小时的在线人数柱状图
 """
 
-@register("astrbot_mcgetter_enhanced", "薄暝", "查询mc服务器信息和玩家列表,在线人数柱状图,渲染为图片(修改自QiChen的mcgetter)", "1.3.0")
+@register("astrbot_mcgetter_enhanced", "薄暝", "查询mc服务器信息和玩家列表,在线人数柱状图,渲染为图片(修改自QiChen的mcgetter)", "1.4.0")
 class MyPlugin(Star):
     """Minecraft服务器信息查询插件"""
     
@@ -108,8 +108,8 @@ class MyPlugin(Star):
             
             message_chain: List[Comp.Image] = []
             servers = json_data.get("servers", {})
-            
-            for server_id, server_info in servers.items():
+            # 按 ID 升序遍历
+            for server_id, server_info in sorted(servers.items(), key=lambda kv: int(kv[0]) if str(kv[0]).isdigit() else 1_000_000_000):
                 try:
                     logger.info(f"正在处理服务器: {server_info['name']} (ID: {server_id}), 信息: {server_info}")
                     mcinfo_img = await self.get_img(server_info['name'], server_info['host'], server_id, str(json_path))
@@ -311,7 +311,7 @@ class MyPlugin(Star):
                 return
                 
             server_list = "当前保存的服务器列表:\n"
-            for server_id, server_info in servers.items():
+            for server_id, server_info in sorted(servers.items(), key=lambda kv: int(kv[0]) if str(kv[0]).isdigit() else 1_000_000_000):
                 server_list += f"ID: {server_id}, 名称: {server_info['name']}, 地址: {server_info['host']}\n"
                 
             yield event.plain_result(server_list.strip())
@@ -410,7 +410,7 @@ class MyPlugin(Star):
                 # 全部服务器模式
                 try:
                     all_hist = await get_all_trend_histories(str(json_path), hours=hours)
-                    for sid, sinfo in servers.items():
+                    for sid, sinfo in sorted(servers.items(), key=lambda kv: int(kv[0]) if str(kv[0]).isdigit() else 1_000_000_000):
                         name = sinfo.get("name", f"ID:{sid}")
                         host = sinfo.get("host")
                         # 与 mc 行为对齐：当前不可达则跳过该服
