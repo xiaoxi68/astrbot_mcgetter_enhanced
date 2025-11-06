@@ -1,5 +1,5 @@
 name: astrbot_plugin_mcgetter_enhanced # 这是你的插件的唯一识别名。
 desc: 查询mc服务器信息和玩家列表,在线人数柱状图渲染为图片,修改自QiChen的mcgetter # 插件简短描述
-version: v1.4.0 # 插件版本号。格式：v1.1.1 或者 v1.1
+version: v1.5.0 # 插件版本号。格式：v1.1.1 或者 v1.1
 author: 薄暝 # 作者
 repo: https://github.com/xiaoxi68/astrbot_mcgetter_enhanced # 插件的仓库地址

@@ -1,4 +1,6 @@
 import json
+import os
+import asyncio
 from pathlib import Path
 import aiofiles
 from typing import Dict, Any, Optional, Tuple, List
@@ -87,17 +89,34 @@ async def write_json(json_path: str, new_data: Dict[str, Any]) -> None:
     Raises:
         IOError: 当文件写入失败时抛出
     """
+    lock = await _acquire_path_lock(json_path)
     try:
         # 确保目录存在
-        Path(json_path).parent.mkdir(parents=True, exist_ok=True)
-        
-        # 异步写入，禁止转义
-        async with aiofiles.open(json_path, 'w', encoding='utf-8') as f:
-            await f.write(json.dumps(new_data, indent=4, ensure_ascii=False))
-        logger.info(f"成功写入JSON文件: {json_path}")
+        dest = Path(json_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        # 使用临时文件 + 原子替换，避免 0KB 截断
+        tmp_path = dest.with_suffix(dest.suffix + ".tmp")
+        payload = json.dumps(new_data, indent=4, ensure_ascii=False)
+
+        async with aiofiles.open(tmp_path, 'w', encoding='utf-8') as f:
+            await f.write(payload)
+            try:
+                await f.flush()  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
+        # 原子替换
+        os.replace(str(tmp_path), str(dest))
+        logger.info(f"成功写入JSON文件(原子替换): {json_path}")
     except Exception as e:
         logger.error(f"写入JSON文件失败: {e}")
         raise IOError(f"写入JSON文件失败: {e}")
+    finally:
+        try:
+            lock.release()
+        except Exception:
+            pass
 
 async def read_json(json_path: str) -> Dict[str, Any]:
     """
@@ -114,25 +133,39 @@ async def read_json(json_path: str) -> Dict[str, Any]:
         json.JSONDecodeError: 当JSON解析失败时抛出
     """
     try:
-        if not Path(json_path).exists():
+        path = Path(json_path)
+        if not path.exists():
             logger.info(f"JSON文件不存在，创建新文件: {json_path}")
             await write_json(json_path=json_path, new_data=DEFAULT_CONFIG)
             return DEFAULT_CONFIG
 
+        # 若存在臨時檔殘留，優先忽略它，由原子替換保證最終一致
+        try:
+            if path.with_suffix(path.suffix + ".tmp").exists():
+                logger.warning(f"檢測到臨時檔殘留，將忽略並繼續讀取正式文件: {json_path}")
+        except Exception:
+            pass
+
         async with aiofiles.open(json_path, 'r', encoding='utf-8') as f:
             content = await f.read()
-            # 避免在控制台输出完整 JSON 内容，改为精简日志
+            # 空檔/全空白 → 自愈
+            if content is None or not content.strip():
+                logger.error(f"JSON為空或僅空白，啟動自愈: {json_path}")
+                await _backup_corrupt_file(json_path, suffix="empty")
+                await write_json(json_path=json_path, new_data=DEFAULT_CONFIG)
+                return DEFAULT_CONFIG
+
+            # 避免在控制台輸出完整 JSON 內容，改為精簡日誌
             logger.debug(f"读取到的JSON内容（{len(content)} 字节）")
             data = json.loads(content)
-            
-            # 检查是否为旧版格式，如果是则自动迁移
+
+            # 檢查是否為舊版格式，如果是則自動遷移
             if is_old_format(data):
                 data = migrate_old_format(data)
-                # 保存迁移后的数据
                 await write_json(json_path, data)
                 logger.info("旧版配置已自动迁移并保存")
-            
-            # 确保数据格式正确
+
+            # 確保資料結構鍵齊全
             if "version" not in data:
                 data["version"] = CURRENT_VERSION
             if "next_id" not in data:
@@ -142,26 +175,22 @@ async def read_json(json_path: str) -> Dict[str, Any]:
             if "trends" not in data or not isinstance(data.get("trends"), dict):
                 data["trends"] = {}
 
-            # 迁移旧版单服趋势到多服结构
+            # 遷移舊版單服趨勢到多服結構
             if isinstance(data.get("trend"), dict) and data["trend"].get("server_id"):
                 sid = str(data["trend"]["server_id"])
                 hist = data["trend"].get("history", []) or []
                 if sid:
                     data["trends"].setdefault(sid, {}).setdefault("history", [])
-                    # 合并，按时间去重保留较新
                     existing = {int(h.get("ts", 0)): int(h.get("count", 0)) for h in data["trends"][sid]["history"]}
                     for h in hist:
                         ts = int(h.get("ts", 0))
                         existing[ts] = int(h.get("count", 0))
                     merged = [{"ts": ts, "count": cnt} for ts, cnt in sorted(existing.items())]
-                    # 仅保留最近 MAX_HISTORY_POINTS 条
                     if len(merged) > MAX_HISTORY_POINTS:
                         merged = merged[-MAX_HISTORY_POINTS:]
                     data["trends"][sid]["history"] = merged
-                # 清空旧字段（后续写回不会再包含）
                 data.pop("trend", None)
-            
-            # 精简化的读取摘要，避免冗长JSON输出
+
             try:
                 servers_cnt = len(data.get("servers", {}))
                 trends_cnt = sum(len((v or {}).get("history", [])) for v in data.get("trends", {}).values())
@@ -170,11 +199,52 @@ async def read_json(json_path: str) -> Dict[str, Any]:
                 logger.info(f"成功读取JSON文件: {json_path}")
             return data
     except json.JSONDecodeError as e:
-        logger.error(f"JSON解析失败: {e}, 文件内容: {content if 'content' in locals() else '无法读取'}")
-        raise json.JSONDecodeError(f"JSON解析失败: {e}", e.doc, e.pos)
+        # 解析失敗 → 備份並自愈
+        logger.error(f"JSON解析失败: {e}, 將嘗試備份並恢復默認配置，路徑: {json_path}")
+        try:
+            await _backup_corrupt_file(json_path, suffix="invalid")
+            await write_json(json_path=json_path, new_data=DEFAULT_CONFIG)
+            return DEFAULT_CONFIG
+        except Exception as ie:
+            logger.error(f"自愈失敗: {ie}")
+            raise json.JSONDecodeError(f"JSON解析失败且自愈失败: {e}", e.doc, e.pos)
     except Exception as e:
         logger.error(f"读取JSON文件失败: {e}, 文件路径: {json_path}")
         raise IOError(f"读取JSON文件失败: {e}")
+
+# 簡單的進程內寫鎖：避免高併發下多任務同時寫同一路徑
+_PATH_LOCKS: Dict[str, asyncio.Lock] = {}
+
+async def _acquire_path_lock(path: str) -> asyncio.Lock:
+    lock = _PATH_LOCKS.get(path)
+    if lock is None:
+        lock = asyncio.Lock()
+        _PATH_LOCKS[path] = lock
+    await lock.acquire()
+    return lock
+
+async def _backup_corrupt_file(json_path: str, suffix: str = "corrupt") -> None:
+    try:
+        p = Path(json_path)
+        if not p.exists():
+            return
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = p.with_name(f"{p.stem}.{suffix}-{ts}{p.suffix}")
+        try:
+            # 僅在原始檔案非空時備份其內容，空檔直接重建
+            if p.exists() and p.stat().st_size > 0:
+                # 使用原子移動避免與寫入競爭
+                os.replace(str(p), str(backup_path))
+                logger.warning(f"已備份疑似損壞的 JSON 檔: {backup_path}")
+            else:
+                logger.warning(f"JSON 檔為空，跳過備份: {json_path}")
+        except PermissionError:
+            # 回退到複製策略
+            async with aiofiles.open(p, 'rb') as rf, aiofiles.open(backup_path, 'wb') as wf:
+                await wf.write(await rf.read())
+            logger.warning(f"已複製備份疑似損壞的 JSON 檔: {backup_path}")
+    except Exception as e:
+        logger.error(f"備份疑似損壞 JSON 檔失敗: {e}")
 
 def get_server_by_name(data: Dict[str, Any], name: str) -> Optional[Tuple[str, Dict[str, Any]]]:
     """
@@ -267,7 +337,6 @@ async def del_data(json_path: str, identifier: str) -> bool:
     try:
         data = await read_json(json_path)
         servers = data.get("servers", {})
-        trends_map = data.get("trends", {}) or {}
         
         # 首先尝试作为ID查找
         if identifier in servers:
